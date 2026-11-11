@@ -12,6 +12,7 @@ class ValidationIssue(BaseModel):
     code: str
     message: str
     severity: Literal["error", "warning"]
+    rejected_value: str | None = None
 
 
 class OrderFields(BaseModel):

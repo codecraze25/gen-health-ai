@@ -46,10 +46,13 @@ class Order(TimestampMixin, Base):
     source_sha256: Mapped[str | None] = mapped_column(String(64))
     extraction: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
+    @property
+    def is_complete(self) -> bool:
+        return all(getattr(self, f) is not None for f in REQUIRED_FIELDS)
+
     def refresh_status(self) -> None:
-        complete = all(getattr(self, f) is not None for f in REQUIRED_FIELDS)
         self.status = (
             OrderStatus.READY.value
-            if complete and not self.validation_issues
+            if self.is_complete and not self.validation_issues
             else OrderStatus.NEEDS_REVIEW.value
         )

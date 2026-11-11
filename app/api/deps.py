@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.session import get_db
+from app.extraction.llm import ExtractionLLM, OpenAIExtractor
 from app.models import User
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -29,3 +31,20 @@ def get_current_user(db: DbSession, token: Annotated[str, Depends(oauth2_scheme)
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+@lru_cache
+def _openai_extractor() -> OpenAIExtractor:
+    return OpenAIExtractor()
+
+
+def get_extractor() -> ExtractionLLM:
+    try:
+        return _openai_extractor()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Document extraction is not configured"
+        ) from exc
+
+
+Extractor = Annotated[ExtractionLLM, Depends(get_extractor)]

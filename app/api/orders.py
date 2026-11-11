@@ -1,12 +1,20 @@
+import hashlib
+import logging
 import uuid
+from pathlib import PurePath
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Extractor
+from app.core.config import get_settings
+from app.extraction.pdf import PdfError
+from app.extraction.service import extract_order
 from app.models import Order, OrderStatus
 from app.schemas.order import OrderCreate, OrderList, OrderOut, OrderUpdate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -25,6 +33,70 @@ def create_order(body: OrderCreate, db: DbSession, user: CurrentUser) -> Order:
     order.refresh_status()
     db.add(order)
     db.commit()
+    return order
+
+
+@router.post(
+    "/upload",
+    response_model=OrderOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        413: {"description": "File too large"},
+        415: {"description": "Not a PDF"},
+        422: {"description": "PDF is corrupt, encrypted, or blank"},
+    },
+)
+def upload_order_document(
+    db: DbSession,
+    user: CurrentUser,
+    extractor: Extractor,
+    file: Annotated[UploadFile, File(description="Order PDF (scanned or digital)")],
+) -> Order:
+    """Create an order from a PDF.
+
+    Extracts the patient's first/last name and date of birth and the ordering provider's name and
+    NPI. Values that are missing or fail validation are left null and explained in
+    `validation_issues`; the order stays `needs_review` until a user fixes them with PATCH.
+    """
+    max_bytes = get_settings().max_upload_mb * 1024 * 1024
+    data = file.file.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            f"File exceeds {get_settings().max_upload_mb} MB",
+        )
+    if not data.lstrip()[:5].startswith(b"%PDF"):
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "File is not a PDF")
+
+    try:
+        outcome = extract_order(data, extractor)
+    except PdfError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+    filename = PurePath(file.filename or "upload.pdf").name[:255]
+    order = Order(
+        owner_id=user.id,
+        **outcome.fields,
+        validation_issues=outcome.issues,
+        extraction=outcome.metadata,
+        source_filename=filename,
+        source_sha256=hashlib.sha256(data).hexdigest(),
+    )
+    order.refresh_status()
+    db.add(order)
+    db.commit()
+    logger.info(
+        "order created from upload",
+        extra={
+            "extra_fields": {
+                "order_id": str(order.id),
+                "status": order.status,
+                "issue_codes": sorted({i["code"] for i in outcome.issues}),
+                "pages": outcome.metadata.get("page_count"),
+                "duration_ms": outcome.metadata.get("duration_ms"),
+            }
+        },
+    )
     return order
 
 
@@ -60,7 +132,12 @@ def update_order(order_id: uuid.UUID, body: OrderUpdate, db: DbSession, user: Cu
     for field, value in changes.items():
         setattr(order, field, value)
     # A user edit of a field is a human review of it, so its open issues are resolved.
-    order.validation_issues = [i for i in order.validation_issues if i["field"] not in changes]
+    issues = [i for i in order.validation_issues if i["field"] not in changes]
+    if order.is_complete:
+        # Document-level issues (failed extraction, multiple patients) are settled once a user
+        # has supplied every required field themselves.
+        issues = [i for i in issues if i["field"] != "document"]
+    order.validation_issues = issues
     order.refresh_status()
     db.commit()
     return order
