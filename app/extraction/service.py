@@ -196,6 +196,7 @@ def extract_order(data: bytes, extractor: ExtractionLLM) -> ExtractionOutcome:
         "page_count": pdf.page_count,
         "pages_processed": [p.number for p in pdf.pages],
         "skipped_blank_pages": pdf.skipped_blank_pages,
+        "rotated_pages": pdf.rotated_pages,
         "has_text_layer": pdf.has_text_layer,
         "fields": {},
     }

@@ -4,8 +4,13 @@ import pymupdf
 
 RENDER_DPI = 150
 MAX_RENDER_SIDE_PX = 2000
-BLANK_PROBE_DPI = 20
-BLANK_DARK_PIXEL_RATIO = 0.002
+# Thin scanned text washes out at very low DPI, so probe at 40 DPI with a light threshold. Content
+# pages measure >1% ink; err toward keeping pages, since dropping one loses data.
+BLANK_PROBE_DPI = 40
+BLANK_INK_THRESHOLD = 220
+BLANK_INK_RATIO = 0.001
+ORIENTATION_PROBE_DPI = 40
+SIDEWAYS_RATIO = 2.0
 
 
 class PdfError(ValueError):
@@ -24,6 +29,7 @@ class LoadedPdf:
     page_count: int
     pages: list[PageImage]
     skipped_blank_pages: list[int] = field(default_factory=list)
+    rotated_pages: list[int] = field(default_factory=list)
     truncated: bool = False
 
     @property
@@ -36,15 +42,37 @@ def _is_blank(page: pymupdf.Page) -> bool:
         return False
     pix = page.get_pixmap(dpi=BLANK_PROBE_DPI, colorspace=pymupdf.csGRAY)
     samples = pix.samples
-    dark = sum(1 for b in samples if b < 160)
-    return dark / max(len(samples), 1) < BLANK_DARK_PIXEL_RATIO
+    ink = sum(1 for b in samples if b < BLANK_INK_THRESHOLD)
+    return ink / max(len(samples), 1) < BLANK_INK_RATIO
 
 
-def _render(page: pymupdf.Page) -> bytes:
+def _profile_contrast(values: list[int]) -> float:
+    mean = sum(values) / len(values)
+    if mean == 0:
+        return 0.0
+    return sum((v - mean) ** 2 for v in values) / len(values) / mean**2
+
+
+def _is_sideways(page: pymupdf.Page) -> bool:
+    """Detects text running vertically (a page scanned sideways) without OCR.
+
+    Horizontal text lines alternate ink and whitespace row by row, so the row ink profile varies
+    far more than the column profile. Vision models misread sideways text noticeably more often.
+    """
+    pix = page.get_pixmap(dpi=ORIENTATION_PROBE_DPI, colorspace=pymupdf.csGRAY)
+    w, h, s = pix.width, pix.height, pix.samples
+    rows = [sum(1 for b in s[y * w : (y + 1) * w] if b < 160) for y in range(h)]
+    cols = [sum(1 for y in range(h) if s[y * w + x] < 160) for x in range(w)]
+    row_c, col_c = _profile_contrast(rows), _profile_contrast(cols)
+    return col_c > row_c * SIDEWAYS_RATIO
+
+
+def _render(page: pymupdf.Page, rotate: int = 0) -> bytes:
     rect = page.rect
     longest_in = max(rect.width, rect.height) / 72
     dpi = min(RENDER_DPI, int(MAX_RENDER_SIDE_PX / longest_in)) if longest_in else RENDER_DPI
-    pix = page.get_pixmap(dpi=max(dpi, 72))
+    zoom = max(dpi, 72) / 72
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom).prerotate(rotate))
     return pix.tobytes("jpeg", jpg_quality=85)
 
 
@@ -70,8 +98,13 @@ def load_pdf(data: bytes, max_pages: int) -> LoadedPdf:
             if _is_blank(page):
                 result.skipped_blank_pages.append(index + 1)
                 continue
+            rotate = 90 if _is_sideways(page) else 0
+            if rotate:
+                result.rotated_pages.append(index + 1)
             result.pages.append(
-                PageImage(number=index + 1, text=page.get_text().strip(), jpeg=_render(page))
+                PageImage(
+                    number=index + 1, text=page.get_text().strip(), jpeg=_render(page, rotate)
+                )
             )
 
     if not result.pages:
