@@ -6,8 +6,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from app.api import health
-from app.core.config import get_settings
+from app.api import auth, health, orders
+from app.core.config import DEFAULT_JWT_SECRET, get_settings
 from app.core.logging import configure_logging, request_id_var
 
 logger = logging.getLogger("app")
@@ -16,6 +16,8 @@ logger = logging.getLogger("app")
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging()
+    if settings.is_production and settings.jwt_secret == DEFAULT_JWT_SECRET:
+        raise RuntimeError("JWT_SECRET must be set in production")
 
     app = FastAPI(
         title=settings.app_name,
@@ -71,6 +73,8 @@ def create_app() -> FastAPI:
         return RedirectResponse(url="/docs")
 
     app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(orders.router)
     return app
 
 
