@@ -1,0 +1,51 @@
+{
+  "clean_typed.pdf": {
+    "patient_first_name": "James",
+    "patient_last_name": "Okafor",
+    "patient_dob": "1958-07-22",
+    "provider_name": "Priya Natarajan",
+    "provider_npi": "1748201930"
+  },
+  "last_first_scanned.pdf": {
+    "patient_first_name": "Luis",
+    "patient_last_name": "Hernandez",
+    "patient_dob": "1962-03-14",
+    "provider_name": "Emily Chen",
+    "provider_npi": "1630492753"
+  },
+  "referring_trap_scanned.pdf": {
+    "patient_first_name": "Aisha",
+    "patient_last_name": "Rahman",
+    "patient_dob": "1947-11-02",
+    "provider_name": "Rachel Adams",
+    "provider_npi": "1503948279"
+  },
+  "missing_dob_and_npi.pdf": {
+    "patient_first_name": "Grace",
+    "patient_last_name": "Liu",
+    "patient_dob": null,
+    "provider_name": "Daniel Kim",
+    "provider_npi": null
+  },
+  "multipage_buried.pdf": {
+    "patient_first_name": "Linda",
+    "patient_last_name": "Whitfield",
+    "patient_dob": "1955-09-30",
+    "provider_name": "Thomas Brennan",
+    "provider_npi": "1876543202"
+  },
+  "rotated_skewed_lowres.pdf": {
+    "patient_first_name": "Owen",
+    "patient_last_name": "Murphy",
+    "patient_dob": "1940-05-19",
+    "provider_name": "Sarah Lindqvist",
+    "provider_npi": "1748201930"
+  },
+  "sample_cpap_fax.pdf": {
+    "patient_first_name": "Marie",
+    "patient_last_name": "Curie",
+    "patient_dob": "1900-12-05",
+    "provider_name": "Arjun Raj",
+    "provider_npi": null
+  }
+}
