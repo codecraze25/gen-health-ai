@@ -21,8 +21,12 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4.1"
+    openai_model: str = "gpt-5.5"
     openai_timeout_seconds: float = 90.0
+    openai_reasoning_effort: str | None = "low"
+
+    nppes_lookup_enabled: bool = True
+    nppes_timeout_seconds: float = 5.0
 
     max_upload_mb: int = 20
     max_pdf_pages: int = 30
