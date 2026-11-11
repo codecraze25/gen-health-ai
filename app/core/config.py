@@ -3,6 +3,8 @@ from functools import lru_cache
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_JWT_SECRET = "dev-insecure-secret-change-me-before-deploying"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -12,7 +14,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./local.db"
 
-    jwt_secret: str = "dev-insecure-secret-change-me"
+    jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
