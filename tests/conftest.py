@@ -4,6 +4,8 @@ os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["ENVIRONMENT"] = "test"
 os.environ["JWT_SECRET"] = "test-secret-that-is-at-least-32-bytes-long"
 os.environ["OPENAI_API_KEY"] = ""
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+os.environ["NPPES_LOOKUP_ENABLED"] = "false"
 
 from collections.abc import Iterator  # noqa: E402
 

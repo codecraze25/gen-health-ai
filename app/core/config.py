@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     nppes_lookup_enabled: bool = True
     nppes_timeout_seconds: float = 5.0
 
+    rate_limit_enabled: bool = True
+    rate_limit_register_per_minute: int = 5
+    rate_limit_login_per_minute: int = 10
+    rate_limit_upload_per_minute: int = 10
+
     max_upload_mb: int = 20
     max_pdf_pages: int = 30
 

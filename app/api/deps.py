@@ -1,10 +1,11 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import login_limiter, register_limiter, upload_limiter
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.extraction.llm import ExtractionLLM, OpenAIExtractor
@@ -31,6 +32,23 @@ def get_current_user(db: DbSession, token: Annotated[str, Depends(oauth2_scheme)
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def _client_ip(request: Request) -> str:
+    # Uvicorn runs with --proxy-headers, so this is the real client behind Render's proxy.
+    return request.client.host if request.client else "unknown"
+
+
+def limit_register(request: Request) -> None:
+    register_limiter.hit(_client_ip(request))
+
+
+def limit_login(request: Request) -> None:
+    login_limiter.hit(_client_ip(request))
+
+
+def limit_upload(user: CurrentUser) -> None:
+    upload_limiter.hit(str(user.id))
 
 
 @lru_cache

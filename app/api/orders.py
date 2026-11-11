@@ -4,10 +4,10 @@ import uuid
 from pathlib import PurePath
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession, Extractor
+from app.api.deps import CurrentUser, DbSession, Extractor, limit_upload
 from app.core.config import get_settings
 from app.extraction.pdf import PdfError
 from app.extraction.service import extract_order
@@ -40,8 +40,10 @@ def create_order(body: OrderCreate, db: DbSession, user: CurrentUser) -> Order:
     "/upload",
     response_model=OrderOut,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_upload)],
     responses={
         413: {"description": "File too large"},
+        429: {"description": "Upload rate limit exceeded"},
         415: {"description": "Not a PDF"},
         422: {"description": "PDF is corrupt, encrypted, or blank"},
     },
